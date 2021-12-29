@@ -4,15 +4,12 @@ import (
 	"fmt"
 	"net"
 	"portscanner/internal/log"
-	"strconv"
 	"sync"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
-// Scan 对传入的所有端口进行扫描，并根据扫描结果设置端口的Status
-func Scan(tuples []Tuple) []Tuple {
+// ScanTCP 对传入的所有端口进行TCP扫描，并根据扫描结果设置端口的Status
+func ScanTCP(tuples []Tuple) []Tuple {
 	wg := sync.WaitGroup{}
 	wg.Add(len(tuples))
 
@@ -20,7 +17,11 @@ func Scan(tuples []Tuple) []Tuple {
 	for i := range tuples {
 		tuple := &tuples[i]
 		go func(t *Tuple) {
-			conn, err := Dial(*t)
+			conn, err := net.DialTimeout(
+				"tcp4",
+				fmt.Sprintf("%s:%v", t.IP.String(), t.Port),
+				500*time.Millisecond,
+			)
 			if err != nil || conn == nil {
 				log.Log().Debug("dialling got error: %s when dialling %s\n", t.String(), err.Error())
 				fmt.Printf("[+] %s is CLOSE\n", t.String())
@@ -38,14 +39,14 @@ func Scan(tuples []Tuple) []Tuple {
 	return tuples
 }
 
-// Dial 向目标端口发起连接请求，如果目标端口回应就返回一个net.Conn对象，否则返回error
-func Dial(t Tuple) (conn net.Conn, err error) {
-	d := net.Dialer{Timeout: 500 * time.Millisecond}
+// ScanUDP 对传入的所有端口进行UDP扫描，并根据扫描结果设置端口的Status
+func ScanUDP(tuples []Tuple) []Tuple {
+	// TODO: implement
+	return nil
+}
 
-	switch t.Protocol {
-	case "tcp":
-		return d.Dial("tcp4", t.IP.String()+":"+strconv.Itoa(t.Port))
-	default:
-	}
-	return nil, errors.Errorf("Unknown protocol: %s", t.Protocol)
+// ScanICMP 对传入的所有端口进行ICMP扫描，并根据扫描结果设置端口的Status
+func ScanICMP(tuples []Tuple) []Tuple {
+	// TODO: implement
+	return nil
 }

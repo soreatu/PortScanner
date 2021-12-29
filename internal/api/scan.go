@@ -47,14 +47,29 @@ func Scan(c *gin.Context) {
 		}
 	}
 
-	log.Log().Info("Starting to scan with %d lines of data...", len(tuples))
+	log.Log().Info(
+		"Starting to scan %s protocol with %d lines of data...",
+		request.Protocol,
+		len(tuples),
+	)
 
 	// 多线程对三元组逐一进行扫描
-	tuples = scanner.Scan(tuples)
+	switch request.Protocol {
+	case "tcp":
+		tuples = scanner.ScanTCP(tuples)
+	case "udp":
+		tuples = scanner.ScanUDP(tuples)
+	case "icmp":
+		tuples = scanner.ScanICMP(tuples)
+	default:
+		log.Log().Error("Unknown protocol: %s", request.Protocol)
+		c.JSON(http.StatusBadRequest, gin.H{"msg": "unknown protocol", "data": nil})
+		return
+	}
 
 	log.Log().Info("Response with %d lines of data", len(tuples))
 
-	c.JSON(http.StatusOK, gin.H{"msg": "scan succeeds", "data": tuples})
+	c.JSON(http.StatusOK, gin.H{"msg": "scan succeeded", "data": tuples})
 }
 
 // ScanRequest 表示一个Scan请求的数据结构

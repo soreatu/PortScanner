@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestScan(t *testing.T) {
+func TestScanTCP(t *testing.T) {
 	type args struct {
 		tuples []Tuple
 	}
@@ -24,7 +24,7 @@ func TestScan(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			Scan(tt.args.tuples)
+			ScanTCP(tt.args.tuples)
 		})
 	}
 }
