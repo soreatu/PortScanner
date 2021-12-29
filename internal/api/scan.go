@@ -20,26 +20,41 @@ func Scan(c *gin.Context) {
 	log.Log().Debug("Get post data `ip`: %s", request.IP)
 	log.Log().Debug("Get post data `port`: %s", request.Port)
 
+	// 白名单协议
+	protocol := request.Protocol
+	if protocol != "tcp" && protocol != "udp" && protocol != "icmp" {
+		c.JSON(http.StatusBadRequest, gin.H{"msg": "bad protocol"})
+		return
+	}
+
 	// 解析用户输入的IP字段
 	ips, err := scanner.ParseIP(request.IP)
 	if err != nil {
 		log.Log().Error("Parsing IP got error: %s", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"msg": "bad request data"})
+		c.JSON(http.StatusBadRequest, gin.H{"msg": "bad IP"})
 		return
 	}
 	// 解析用户输入的Port字段
-	ports, err := scanner.ParsePort(request.Port)
-	if err != nil {
-		log.Log().Error("Parsing Port got error: %s", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"msg": "bad request data"})
-		return
+	var ports []int
+	if protocol != "icmp" {
+		ports, err = scanner.ParsePort(request.Port)
+		if err != nil {
+			log.Log().Error("Parsing Port got error: %s", err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"msg": "bad port"})
+			return
+		}
 	}
 
 	// 汇总，生成三元组
 	var tuples []scanner.Tuple
 	for i := 0; i < len(ips); i++ {
-		for j := 0; j < len(ports); j++ {
-			tuples = append(tuples, scanner.NewTuple(ips[i], ports[j], request.Protocol))
+		// icmp协议无需端口号
+		if protocol != "icmp" {
+			for j := 0; j < len(ports); j++ {
+				tuples = append(tuples, scanner.NewTuple(protocol, ips[i], ports[j]))
+			}
+		} else {
+			tuples = append(tuples, scanner.NewTuple(protocol, ips[i], -1))
 		}
 		// 限制扫描的最大数量
 		if len(tuples) > 10000 {
@@ -53,7 +68,7 @@ func Scan(c *gin.Context) {
 		len(tuples),
 	)
 
-	// 多线程对三元组逐一进行扫描
+	// 调用对应协议的扫描函数进行多线程扫描
 	switch request.Protocol {
 	case "tcp":
 		tuples = scanner.ScanTCP(tuples)
@@ -62,9 +77,10 @@ func Scan(c *gin.Context) {
 	case "icmp":
 		tuples = scanner.ScanICMP(tuples)
 	default:
-		log.Log().Error("Unknown protocol: %s", request.Protocol)
-		c.JSON(http.StatusBadRequest, gin.H{"msg": "unknown protocol", "data": nil})
-		return
+		// 已有白名单，不会执行
+		//log.Log().Error("Unknown protocol: %s", request.Protocol)
+		//c.JSON(http.StatusBadRequest, gin.H{"msg": "unknown protocol", "data": nil})
+		//return
 	}
 
 	log.Log().Info("Response with %d lines of data", len(tuples))

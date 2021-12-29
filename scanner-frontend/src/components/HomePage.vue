@@ -115,13 +115,13 @@ export default {
       var form_protocol = this.formInline.protocol;
       var form_ip = this.formInline.ip;
       var form_port = this.formInline.port;
-      if (form_protocol == '') {
+      if (form_protocol === '') {
         alert("protocol is empty!");
         return;
-      } else if (form_ip == '')  {
+      } else if (form_ip === '')  {
         alert("ip is empty!");
         return;
-      } else if (form_port == '') {
+      } else if (form_port === '' && form_protocol !== 'icmp') {
         alert("port is empty!");
         return;
       }
@@ -144,8 +144,10 @@ export default {
             } else {
               row.status = "UNKNOWN"
             }
-            // row.port = String(row.port)
-            // rsp.data.data[i] = row
+            // icmp不显示端口
+            if (form_protocol == "icmp") {
+              row.port = null
+            }
             console.log(row);
           }
           this.tableData = rsp.data.data

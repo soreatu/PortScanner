@@ -1,6 +1,6 @@
 ## Introduction
 
-端口扫描器，支持TCP<del>、UDP、ICMP</del>协议的多线程扫描
+端口扫描器，支持TCP<del>、UDP</del>、ICMP协议的多线程扫描
 
 ## 架构
 
@@ -40,7 +40,7 @@ solution：方法要传入指针，才能对原始的结构体成员进行修改
 
 - [ ] Scan原生扫描（TCP半连接/全连接+UDP）
 
-- [ ] ICMP协议
+- [x] ICMP协议
 
 - [ ] 前端进度条
 

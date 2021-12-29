@@ -1,6 +1,8 @@
 package scanner
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"golang.org/x/net/ipv4"
 	"net"
@@ -11,34 +13,19 @@ import (
 	"golang.org/x/net/icmp"
 )
 
+var ICMPPayload = [11]byte{0x50, 0x6f, 0x72, 0x74, 0x53, 0x63, 0x61, 0x6e, 0x6e, 0x65, 0x72}
+
 // ScanTCP 对传入的所有端口进行TCP扫描，并根据扫描结果设置端口的Status
 func ScanTCP(tuples []Tuple) []Tuple {
 	wg := sync.WaitGroup{}
-	wg.Add(len(tuples))
 
-	// 多线程逐一扫描
+	// 多线程扫描
 	for i := range tuples {
-		tuple := &tuples[i]
-		go func(t *Tuple) {
-			conn, err := net.DialTimeout(
-				"tcp4",
-				fmt.Sprintf("%s:%v", t.IP, t.Port),
-				500*time.Millisecond,
-			)
-			if err != nil || conn == nil {
-				log.Log().Debug("dialling got error: %s when dialling %s\n", t.String(), err.Error())
-				fmt.Printf("[+] %s is CLOSE\n", t.String())
-			} else {
-				t.SetOpen()
-				fmt.Printf("[+] %s is OPEN\n", t.String())
-				conn.Close()
-			}
-			wg.Done()
-		}(tuple)
+		wg.Add(1)
+		go scanTCP(&tuples[i], &wg)
 	}
 
 	wg.Wait()
-
 	return tuples
 }
 
@@ -50,50 +37,66 @@ func ScanUDP(tuples []Tuple) []Tuple {
 
 // ScanICMP 对传入的所有端口进行ICMP扫描，并根据扫描结果设置端口的Status
 func ScanICMP(tuples []Tuple) []Tuple {
-	// 读取超时
-	timeout := 5 * time.Second
-
-	conn, err := net.ListenIP("ip:icmp", nil)
-	if err != nil {
-		log.Log().Error("calling ListenIP failed: %s", err.Error())
-	}
-	defer conn.Close()
-	//conn.SetReadDeadline()
-
-	// 多线程发包
-	for i, t := range tuples {
-		go sendICMPData(conn, i, t)
+	// 多线程扫描
+	for i := range tuples {
+		go scanICMP(i, &tuples[i])
 	}
 
-	// 收包，解析包，并设置状态
 	done := make(chan error, 1)
 	go func() {
+		// 开监听
+		conn, err := net.ListenIP("ip4:icmp", nil)
+		if err != nil {
+			log.Log().Error("failed to call ListenIP, error: %s", err.Error())
+			done <- err
+			return
+		}
+
 		for {
-			buff := make([]byte, 256)
+			buff := make([]byte, 1024)
+			_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+
+			// block直至接受到回包，或者超时
 			n, ra, err := conn.ReadFrom(buff)
 			if err != nil {
+				log.Log().Error("failed to read ICMP packet: %s", err.Error())
 				done <- err
 				return
 			}
-			go receiveICMPData(&tuples, ra, buff[:n])
+			go receiveICMP(ra, buff[:n], &tuples)
 		}
 	}()
 
 	select {
 	case err := <-done:
-		log.Log().Error("failed to read from connection: %s", err.Error())
-		return nil
-	case <-time.After(timeout):
-		log.Log().Info("trying to read from connection timed out")
+		log.Log().Error("error: %s", err.Error())
+	case <-time.After(3 * time.Second):
+		log.Log().Info("waiting times out")
 	}
 
 	return tuples
 }
 
-// sendICMPData 组装ICMP请求包，并向目标端口发送
-func sendICMPData(conn *net.IPConn, i int, t Tuple) {
-	log.Log().Info("sending ICMP packet to %s:%v", t.IP, t.Port)
+func scanTCP(t *Tuple, wg *sync.WaitGroup) {
+	defer wg.Done()
 
+	// 发起TCP三次握手
+	conn, err := net.DialTimeout(
+		"tcp4",
+		fmt.Sprintf("%s:%v", t.IP, t.Port),
+		500*time.Millisecond,
+	)
+	if err != nil || conn == nil {
+		log.Log().Debug("dialling got error: %s when dialling %s\n", t.String(), err.Error())
+		return
+	}
+	defer conn.Close()
+
+	t.SetOpen()
+}
+
+// scanICMP 组装ICMP请求包，并向目标端口发送
+func scanICMP(i int, t *Tuple) {
 	// 组建UDP请求包
 	msg := &icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
@@ -101,41 +104,61 @@ func sendICMPData(conn *net.IPConn, i int, t Tuple) {
 		Body: &icmp.Echo{
 			ID:   0x23333,
 			Seq:  i,
-			Data: []byte{0x50, 0x6f, 0x72, 0x74, 0x53, 0x63, 0x61, 0x6e, 0x6e, 0x65, 0x72},
+			Data: ICMPPayload[:],
 		},
 	}
 	buff, _ := msg.Marshal(nil)
 
 	// 发送给目标端口
-	_, err := conn.WriteTo(buff, &net.UDPAddr{IP: t.IP})
+	log.Log().Info("sending ICMP packet to %s", t.IP)
+	conn, err := net.Dial("ip4:icmp", t.IP.String())
 	if err != nil {
-		log.Log().Error("failed to send ICMP packet to %s:%v", t.IP, t.Port)
+		log.Log().Error("failed to dial %s, error: %s", t.IP, err.Error())
+		return
+	}
+	defer conn.Close()
+
+	_, err = conn.Write(buff)
+	if err != nil {
+		log.Log().Error("failed to send ICMP packet to %s, error: %s", t.IP, err.Error())
+		return
 	}
 }
 
-// receiveICMPData 解析ICMP响应包，并设置状态
-func receiveICMPData(tuples *[]Tuple, ra net.Addr, buff []byte) {
-	// 解析message
+// receiveICMP 解析ICMP回包，并根据回包类型设置对应的Tuple状态
+func receiveICMP(ra net.Addr, buff []byte, tuples *[]Tuple) {
+	log.Log().Info("receiving reply packet data: %s", hex.EncodeToString(buff))
+
+	// 解析回包
 	msg, err := icmp.ParseMessage(1, buff)
 	if err != nil {
-		log.Log().Error("failed to parse icmp message: %s", err.Error())
+		log.Log().Error("failed to parse message: %s", err.Error())
 		return
 	}
+	log.Log().Info("parsed icmp message: %v %v", msg.Type, msg.Body)
 
-	reply, ok := msg.Body.(*icmp.Echo)
+	// 反射为Echo类型的包
+	body, ok := msg.Body.(*icmp.Echo)
 	if !ok {
-		log.Log().Error("not echo reply: %s")
+		log.Log().Error("message type is not echo")
 		return
 	}
-	// 取序列号
-	seq := reply.Seq
-	if seq < 0 || seq > len(*tuples) {
-		log.Log().Error("echo reply sequence out of range: %d", seq)
+	// 校验数据段
+	if bytes.Compare(body.Data, ICMPPayload[:]) != 0 {
+		log.Log().Error("message data does not match")
 		return
 	}
-	// 设置状态为OPEN
+	// 提取序列号并校验
+	seq := body.Seq
+	if seq < 0 || len(*tuples) <= seq {
+		log.Log().Info("sequence number out of bound: %d", seq)
+		return
+	}
+	// 校验ip地址
+	if (*tuples)[seq].IP.String() != ra.String() {
+		log.Log().Info("IP address %s does not match %s", (*tuples)[seq].IP, ra)
+		return
+	}
+	// 设置Status为OPEN
 	(*tuples)[seq].SetOpen()
-	//if t.IP.String() != ra.String() {
-	//
-	//}
 }

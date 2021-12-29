@@ -13,7 +13,7 @@ func TestScanTCP(t *testing.T) {
 	p := 20000
 	tuples := make([]Tuple, 0)
 	for ; p < 20100; p += 1 {
-		tuples = append(tuples, NewTuple(net.ParseIP("127.0.0.1"), p, "tcp"))
+		tuples = append(tuples, NewTuple("tcp", net.ParseIP("127.0.0.1"), p))
 	}
 
 	tests := []struct {

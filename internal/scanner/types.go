@@ -27,7 +27,7 @@ type Tuple struct {
 }
 
 // NewTuple creates a tuple with given data.
-func NewTuple(ip net.IP, port int, protocol string) Tuple {
+func NewTuple(protocol string, ip net.IP, port int) Tuple {
 	return Tuple{
 		IP:         ip,
 		Port:       port,
