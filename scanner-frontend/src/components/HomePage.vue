@@ -7,8 +7,8 @@
       <el-form-item label="Protocol">
         <el-select v-model="formInline.protocol" placeholder="tcp" style="width: 80px">
           <el-option label="tcp" value="tcp"></el-option>
-<!--          <el-option label="udp" value="udp"></el-option>-->
-<!--          <el-option label="icmp" value="icmp"></el-option>-->
+          <el-option label="udp" value="udp"></el-option>
+          <el-option label="icmp" value="icmp"></el-option>
         </el-select>
       <el-form-item label="IP" style="padding-left: 24px">
         <el-input v-model="formInline.ip" placeholder="192.168.1.1/24" style="width: 180px"></el-input>

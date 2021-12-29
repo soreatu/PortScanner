@@ -76,5 +76,5 @@ func Scan(c *gin.Context) {
 type ScanRequest struct {
 	Protocol string `json:"protocol"`
 	IP       string `json:"ip"`
-	Port     string `json:"port"`
+	Port     string `json:"port,omitempty"`
 }

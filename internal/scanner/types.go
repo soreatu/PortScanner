@@ -22,7 +22,7 @@ func init() {
 type Tuple struct {
 	Protocol   string `json:"protocol"`
 	IP         net.IP `json:"ip"`
-	Port       int    `json:"port"`
+	Port       int    `json:"port,omitempty"`
 	PortStatus Status `json:"status"`
 }
 
