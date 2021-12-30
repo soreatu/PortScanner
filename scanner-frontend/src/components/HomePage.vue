@@ -55,8 +55,8 @@
           width="120">
         </el-table-column>
         <el-table-column
-          prop="status"
-          label="Status"
+          prop="state"
+          label="State"
           width="120">
         </el-table-column>
       </el-table>
@@ -80,17 +80,17 @@ export default {
       //   protocol: 'tcp',
       //   ip: '127.0.0.1',
       //   port: 22,
-      //   status: 'OPEN'
+      //   state: 'OPEN'
       // },{
       //   protocol: 'tcp',
       //   ip: '127.0.0.1',
       //   port: 80,
-      //   status: 'CLOSE'
+      //   state: 'CLOSE'
       // },{
       //   protocol: 'udp',
       //   ip: '127.0.0.1',
       //   port: 53,
-      //   status: 'FILTER'
+      //   state: 'FILTER'
       // }],
 
     }
@@ -100,11 +100,11 @@ export default {
   // },
   methods: {
     tableRowClassName({row, rowIndex}) {
-      if (row.status === 'CLOSE') {
+      if (row.state === 'CLOSE') {
         return 'close-row';
-      } else if (row.status === 'OPEN') {
+      } else if (row.state === 'OPEN') {
         return 'open-row';
-      } else if (row.status === 'FILTER') {
+      } else if (row.state === 'FILTER') {
         return 'filter-row';
       }
       return '';
@@ -135,14 +135,14 @@ export default {
         })
           for (var i=0; i < rsp.data.data.length; i++) {
             let row = rsp.data.data[i]
-            if (row.status === 0) {
-              row.status = 'CLOSE'
-            } else if (row.status === 1) {
-              row.status = 'OPEN'
-            } else if (row.status === 2) {
-              row.status = 'FILTER'
+            if (row.state === 0) {
+              row.state = 'CLOSE'
+            } else if (row.state === 1) {
+              row.state = 'OPEN'
+            } else if (row.state === 2) {
+              row.state = 'FILTER'
             } else {
-              row.status = "UNKNOWN"
+              row.state = "UNKNOWN"
             }
             // icmp不显示端口
             if (form_protocol == "icmp") {

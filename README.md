@@ -14,6 +14,19 @@
 ## demo
 ![demo](https://soreatu-1300077947.cos.ap-nanjing.myqcloud.com/uPic/iu8PW9.png)
 
+
+## Scan
+
+### UDP Scan
+- 发送UDP数据包
+- CLOSE：回icmp unreachable
+- OPEN: 
+
+### ICMP Scan
+- 发送Echo包
+- 有Echo回包则OPEN
+- 否则CLOSE
+
 ## Issues
 
 ### issue1
@@ -38,9 +51,13 @@ solution：方法要传入指针，才能对原始的结构体成员进行修改
 
 进阶：
 
-- [ ] Scan原生扫描（TCP半连接/全连接+UDP）
+- [ ] TCP-SYN半连接扫描
+
+- [x] UDP协议
 
 - [x] ICMP协议
+
+- [ ] 前端 错误细化
 
 - [ ] 前端进度条
 

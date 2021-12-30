@@ -6,10 +6,10 @@ import (
 	"net"
 )
 
-type Status int
+type State int
 
 const (
-	CLOSE Status = iota
+	CLOSE State = iota
 	OPEN
 	FILTER
 )
@@ -23,7 +23,7 @@ type Tuple struct {
 	Protocol   string `json:"protocol"`
 	IP         net.IP `json:"ip"`
 	Port       int    `json:"port,omitempty"`
-	PortStatus Status `json:"status"`
+	PortStatus State  `json:"state"`
 }
 
 // NewTuple creates a tuple with given data.
