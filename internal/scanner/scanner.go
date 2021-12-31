@@ -4,113 +4,31 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/phayes/freeport"
-	"golang.org/x/net/ipv4"
 	"net"
-	"portscanner/internal/log"
 	"sync"
 	"time"
 
+	"portscanner/internal/log"
+
 	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
 )
 
-var UDPPayload = [3]byte{'l', 's', '\n'}
+var UDPPayload = [7]byte{'w', 'h', 'o', 'a', 'm', 'i', '\n'}
 var ICMPPayload = [11]byte{'P', 'o', 'r', 't', 'S', 'c', 'a', 'n', 'n', 'e', 'r'}
 
 // ScanTCP 对传入的所有端口进行TCP扫描，并根据扫描结果设置端口的Status
 func ScanTCP(tuples []Tuple) []Tuple {
 	wg := sync.WaitGroup{}
+
 	// 多线程发送TCP-SYN包
 	for i := range tuples {
 		wg.Add(1)
-		conn, _ := net.Dial("tcp", fmt.Sprintf("%s:%d", tuples[i].IP, tuples[i].Port))
-		conn.Close()
-		//go scanTCPSYN(i, &tuples[i], &wg)
+		go scanTCP(&tuples[i], &wg)
 	}
 
 	wg.Wait()
 	return tuples
-}
-
-// scanTCPSYN 向目标地址发送一个TCP-SYN请求包
-func scanTCPSYN(i int, t *Tuple, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// 组建tcp header
-	srcPort, err := freeport.GetFreePort()
-	if err != nil {
-		log.Log().Error("failed to get a free port: %s", srcPort)
-		return
-	}
-
-	//tcp := header.TCP(make([]byte, 20))
-	//fields := header.TCPFields{
-	//	SrcPort:       uint16(srcPort),
-	//	DstPort:       uint16(t.Port),
-	//	SeqNum:        uint32(0xdeadbeaf + i),
-	//	AckNum:        0,
-	//	DataOffset:    20, // 20 bytes
-	//	Flags:         header.TCPFlagSyn,
-	//	WindowSize:    65535,
-	//	Checksum:      0,
-	//	UrgentPointer: 0,
-	//}
-	//tcp.Encode(&fields)
-	header := &TCPHeader{
-		Source:      uint16(srcPort),
-		Destination: uint16(t.Port),
-		SeqNum:      uint32(0xdeadbeaf + i),
-		AckNum:      0,
-		DataOffset:  5,
-		Reserved:    0,
-		ECN:         0,
-		Ctrl:        SYN,
-		Window:      65535,
-		Urgent:      0,
-		Options:     []TCPOption{},
-	}
-	tcp := header.Marshal()
-
-	// 开3层连接
-	ipConn, err := net.DialIP("ip4:tcp", nil, &net.IPAddr{IP: t.IP})
-	if err != nil {
-		log.Log().Error("failed to dial ip: %s", err.Error())
-		return
-	}
-
-	header.Checksum = Checksum(tcp, ipConn.LocalAddr().(*net.IPAddr).IP, t.IP)
-	tcp = header.Marshal()
-	log.Log().Info("Sending data: %v", tcp)
-
-	// 发TCP-SYN包
-	_, err = ipConn.Write(tcp)
-	if err != nil {
-		log.Log().Error("failed to write to ipConn: %s", err.Error())
-		return
-	}
-
-	buff := make([]byte, 1024)
-	_ = ipConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	// 接受回包
-	n, err := ipConn.Read(buff)
-	if err != nil {
-		// timeout + icmp unreachable => FILTER
-		log.Log().Info("read from ipConn error: %s", err.Error())
-		t.SetFilter()
-		return
-	}
-	log.Log().Info("read from ipConn: %v", buff[:n])
-
-	// 解析数据段
-	recv := NewTCPHeader(buff)
-	// SYN-ACK => OPEN
-	// RST => CLOSE
-	if recv.HasFlag(SYN) && recv.HasFlag(ACK) {
-		log.Log().Info("target %s responded with SYN+ACK", t.IP)
-		t.SetOpen()
-	} else if recv.HasFlag(RST) {
-		log.Log().Info("target %s responded with RST", t.IP)
-	}
 }
 
 // ScanUDP 对传入的所有端口进行UDP扫描，并根据扫描结果设置端口的Status
@@ -124,48 +42,6 @@ func ScanUDP(tuples []Tuple) []Tuple {
 
 	wg.Wait()
 	return tuples
-}
-
-// scanUDP 向目标发送一个UDP请求包
-func scanUDP(t *Tuple, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// 建立udp连接
-	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: t.IP, Port: t.Port})
-	if err != nil {
-		log.Log().Debug("failed to dial (udp) %s: %s\n", t, err.Error())
-		return
-	}
-	defer conn.Close()
-
-	// 发数据包
-	_, err = conn.Write(UDPPayload[:])
-	if err != nil {
-		log.Log().Debug("failed to write (udp) %s: %s\n", t, err.Error())
-		return
-	}
-
-	// OPEN: 有UDP回包
-	// FILTER: 超时
-	// CLOSE: 返回icmp port unreachable报文
-
-	buff := make([]byte, 256)
-	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	// block直至读取到回包
-	n, err := conn.Read(buff)
-	if err != nil {
-		log.Log().Debug("failed to read (udp) from %s: %s", t, err.Error())
-		if err.(*net.OpError).Timeout() {
-			// 超时，设置为FILTER
-			log.Log().Info("reading timed out, set FILTER on %s", conn.RemoteAddr())
-			t.SetFilter()
-		}
-		// 否则，默认为CLOSE
-		return
-	}
-	// 有回包，设置为OPEN
-	log.Log().Info("read %s from <%s>", buff[:n], conn.RemoteAddr())
-	t.SetOpen()
 }
 
 // ScanICMP 对传入的所有端口进行ICMP扫描，并根据扫描结果设置端口的Status
@@ -211,6 +87,7 @@ func ScanICMP(tuples []Tuple) []Tuple {
 	return tuples
 }
 
+// scanTCP 向目标端口发起TCP三次握手，若握手成功，则设置端口状态为OPEN
 func scanTCP(t *Tuple, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -226,6 +103,38 @@ func scanTCP(t *Tuple, wg *sync.WaitGroup) {
 	}
 	defer conn.Close()
 
+	t.SetOpen()
+}
+
+// scanUDP 向目标端口发送一个UDP数据包，若目标端口有回应UDP数据包，则设置端口状态为OPEN
+func scanUDP(t *Tuple, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	// 建立udp连接
+	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: t.IP, Port: t.Port})
+	if err != nil {
+		log.Log().Debug("failed to dial (udp) %s: %s\n", t, err.Error())
+		return
+	}
+	defer conn.Close()
+
+	// 发数据包
+	_, err = conn.Write(UDPPayload[:])
+	if err != nil {
+		log.Log().Debug("failed to write (udp) %s: %s\n", t, err.Error())
+		return
+	}
+
+	buff := make([]byte, 256)
+	_ = conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
+	// block直至读取到回包
+	n, err := conn.Read(buff)
+	if err != nil {
+		log.Log().Debug("failed to read (udp) from %s: %s", t, err.Error())
+		return
+	}
+	// 有回包，设置为OPEN
+	log.Log().Info("read %s from <%s>", buff[:n], conn.RemoteAddr())
 	t.SetOpen()
 }
 

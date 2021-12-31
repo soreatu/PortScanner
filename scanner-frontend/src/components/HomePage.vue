@@ -110,11 +110,11 @@ export default {
       return '';
     },
     scan: async function() {
-      console.log('submit!');
-
+      // 读取表单数据
       var form_protocol = this.formInline.protocol;
       var form_ip = this.formInline.ip;
       var form_port = this.formInline.port;
+      // 检测表单数据是否为空
       if (form_protocol === '') {
         alert("protocol is empty!");
         return;
@@ -127,7 +127,7 @@ export default {
       }
 
       try {
-
+        // 调用api，发送数据，并等待响应
         var rsp = await this.$http.post('/scan', {
           protocol: form_protocol,
           ip: form_ip,
@@ -135,6 +135,7 @@ export default {
         })
           for (var i=0; i < rsp.data.data.length; i++) {
             let row = rsp.data.data[i]
+            // 根据返回的数据设置端口状态
             if (row.state === 0) {
               row.state = 'CLOSE'
             } else if (row.state === 1) {
@@ -150,6 +151,7 @@ export default {
             }
             console.log(row);
           }
+          // 将数据填充到表格中
           this.tableData = rsp.data.data
       }
       catch(err) {

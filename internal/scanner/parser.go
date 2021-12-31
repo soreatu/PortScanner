@@ -1,17 +1,18 @@
 package scanner
 
 import (
-	"github.com/pkg/errors"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // ParseIP 解析用户输入的IP字段，返回多个IP地址
 func ParseIP(s string) ([]net.IP, error) {
 	var ips []net.IP
 
-	// 过滤空格
+	// 消除空格
 	s = strings.ReplaceAll(s, " ", "")
 	// 解析多个网络段，用","隔开
 	segments := strings.Split(s, ",")
@@ -53,7 +54,7 @@ func ParseIP(s string) ([]net.IP, error) {
 func ParsePort(s string) ([]int, error) {
 	var ports []int
 
-	// 过滤空格
+	// 消除空格
 	s = strings.ReplaceAll(s, " ", "")
 	// 解析多个端口，用","隔开
 	segments := strings.Split(s, ",")
@@ -97,6 +98,7 @@ func ParsePort(s string) ([]int, error) {
 	return ports, nil
 }
 
+// increment 将IP地址+1
 func increment(ip net.IP) {
 	for i := len(ip) - 1; i >= 0; i-- {
 		ip[i]++

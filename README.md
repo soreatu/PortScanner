@@ -1,13 +1,13 @@
 ## Introduction
 
-端口扫描器，支持TCP<del>、UDP</del>、ICMP协议的多线程扫描
+端口扫描器，支持TCP、UDP、ICMP协议的多线程扫描
 
 ## 架构
 
 - Vue
 - Golang/gin
 
-![architecture](https://soreatu-1300077947.cos.ap-nanjing.myqcloud.com/uPic/2021-12-23-22-56-06-image.png)
+![architecture](https://soreatu-1300077947.cos.ap-nanjing.myqcloud.com/uPic/8E334B0F-AFE4-42AD-8553-1D2C798FBED2.png)
 
 
 
