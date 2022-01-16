@@ -1,5 +1,7 @@
 ## Introduction
 
+学校的一个课程设计作业。
+
 端口扫描器，支持TCP、UDP、ICMP协议的多线程扫描
 
 ## 架构
